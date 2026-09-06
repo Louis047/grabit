@@ -51,17 +51,33 @@ static int wait_fd(int fd, short events, int64_t deadline) {
 	return poll(&pfd, 1, (int)remaining) > 0 ? 0 : -1;
 }
 
-static int ipc_send(int fd, const char *req, int64_t deadline) {
-	size_t len = strlen(req);
+static int ipc_write(int fd, const void *buf, size_t len, int64_t deadline) {
+	const char *p = buf;
 	while (len > 0) {
 		if (wait_fd(fd, POLLOUT, deadline) != 0) return -1;
-		ssize_t w = write(fd, req, len);
+		ssize_t w = write(fd, p, len);
 		if (w < 0) {
 			if (errno == EINTR || errno == EAGAIN) continue;
 			return -1;
 		}
-		req += w;
+		p += w;
 		len -= (size_t)w;
+	}
+	return 0;
+}
+
+static int ipc_read_exact(int fd, void *buf, size_t len, int64_t deadline) {
+	char *p = buf;
+	while (len > 0) {
+		if (wait_fd(fd, POLLIN, deadline) != 0) return -1;
+		ssize_t r = read(fd, p, len);
+		if (r == 0) return -1;
+		if (r < 0) {
+			if (errno == EINTR || errno == EAGAIN) continue;
+			return -1;
+		}
+		p += r;
+		len -= (size_t)r;
 	}
 	return 0;
 }
@@ -89,7 +105,7 @@ int gwm_ipc_query(const char *path, const char *req,
 
 	int64_t deadline = gwm_ipc_deadline(WM_IPC_TIMEOUT_MS);
 	struct grabit_buf body = {0};
-	int rc = ipc_send(fd, req, deadline);
+	int rc = ipc_write(fd, req, strlen(req), deadline);
 	if (rc == 0) {
 		shutdown(fd, SHUT_WR);
 		rc = slurp(fd, &body, deadline);
@@ -104,6 +120,53 @@ int gwm_ipc_query(const char *path, const char *req,
 	grabit_buf_free(&body);
 	if (!root) {
 		log_debug("wm ipc: invalid JSON from %s", req);
+		return -1;
+	}
+	*root_out = root;
+	return 0;
+}
+
+#define I3_MAGIC "i3-ipc"
+#define I3_MAGIC_LEN 6
+#define I3_HDR_LEN (I3_MAGIC_LEN + 8)
+
+int gwm_ipc_query_i3(const char *path, uint32_t type,
+					 struct json_object **root_out) {
+	*root_out = NULL;
+	int fd = ipc_connect(path);
+	if (fd < 0) return -1;
+
+	int64_t deadline = gwm_ipc_deadline(WM_IPC_TIMEOUT_MS);
+	char hdr[I3_HDR_LEN] = {0};
+	memcpy(hdr, I3_MAGIC, I3_MAGIC_LEN);
+	memcpy(hdr + I3_MAGIC_LEN + 4, &type, sizeof type);
+
+	char *body = NULL;
+	uint32_t len = 0, reply = 0;
+	int rc = ipc_write(fd, hdr, sizeof hdr, deadline);
+	if (rc == 0) rc = ipc_read_exact(fd, hdr, sizeof hdr, deadline);
+	if (rc == 0) {
+		memcpy(&len, hdr + I3_MAGIC_LEN, sizeof len);
+		memcpy(&reply, hdr + I3_MAGIC_LEN + 4, sizeof reply);
+		if (memcmp(hdr, I3_MAGIC, I3_MAGIC_LEN) != 0 || reply != type ||
+			len > WM_IPC_MAX_BYTES)
+			rc = -1;
+	}
+	if (rc == 0) {
+		body = malloc((size_t)len + 1);
+		rc = body ? ipc_read_exact(fd, body, len, deadline) : -1;
+	}
+	close(fd);
+	if (rc != 0) {
+		free(body);
+		return -1;
+	}
+	body[len] = '\0';
+
+	struct json_object *root = json_tokener_parse(body);
+	free(body);
+	if (!root) {
+		log_debug("wm ipc: invalid JSON from i3 message %u", type);
 		return -1;
 	}
 	*root_out = root;

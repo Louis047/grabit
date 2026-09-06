@@ -336,10 +336,12 @@ cannot be combined with
 .BR \-F ,
 or
 .BR \-\-record .
-On Hyprland the window's geometry is read over IPC and the screen is cropped to
-it, so
+On Hyprland and sway the window's geometry is read over IPC and the screen is
+cropped to it, so
 .B \-e
-works and anything overlapping the window is included. On niri, geometry is only
+works and anything overlapping the window is included. On sway the rectangle
+covers the window and its border but not its title bar, matching what sway's own
+IPC reports. On niri, geometry is only
 published for floating windows; a floating window takes the same crop path,
 while a tiled window is rendered by niri itself via its
 .B screenshot\-window
@@ -747,7 +749,14 @@ it locates the Hyprland IPC socket that powers window snapping and
 .B NIRI_SOCKET
 Set by niri; locates the niri IPC socket that powers
 .BR \-w / \-\-window
-and window snapping. Absent elsewhere, both degrade gracefully.
+and window snapping.
+.TP
+.B SWAYSOCK
+Set by sway; locates the sway IPC socket that powers
+.BR \-w / \-\-window
+and window snapping. Sway's IPC does not list layer surfaces, so bars and
+panels are absent from window snapping there. Absent elsewhere, all of this
+degrades gracefully.
 .TP
 .BR XCURSOR_THEME ", " XCURSOR_SIZE
 Cursor theme and size for the region selector and overlays

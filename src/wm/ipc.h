@@ -13,4 +13,7 @@ int64_t gwm_ipc_deadline(int ms);
 int gwm_ipc_query(const char *path, const char *req,
 				  struct json_object **root_out);
 
+int gwm_ipc_query_i3(const char *path, uint32_t type,
+					 struct json_object **root_out);
+
 #endif

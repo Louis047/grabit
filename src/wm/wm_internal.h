@@ -8,6 +8,7 @@ enum wm_kind {
 	WM_NONE = 0,
 	WM_HYPRLAND,
 	WM_NIRI,
+	WM_SWAY,
 };
 
 enum wm_kind grabit_wm_detect(void);

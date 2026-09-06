@@ -129,6 +129,7 @@ GRABIT_SRCS := \
 	src/wm/ipc.c \
 	src/wm/hyprland.c \
 	src/wm/niri.c \
+	src/wm/sway.c \
 	src/mime.c \
 	src/wl/wl.c \
 	src/wl/toplevel.c \
