@@ -403,7 +403,9 @@ int grabit_hyprland_clients(struct rect **out, size_t *n_out) {
 
 		bool fullscreen = false;
 		if (json_object_object_get_ex(c, "fullscreen", &o))
-			fullscreen = (json_object_get_int64(o) & 2) != 0;
+			fullscreen = json_object_get_type(o) == json_type_boolean
+							 ? json_object_get_boolean(o)
+							 : (json_object_get_int64(o) & 2) != 0;
 
 		enum client_tier tier;
 		if (is_pinned)
