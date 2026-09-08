@@ -280,10 +280,11 @@ int grabit_hyprland_layers(struct rect **out, size_t *n_out) {
 
 enum client_tier {
 	TIER_TILED = 0,
-	TIER_SPECIAL_TILED = 1,
-	TIER_FLOATING = 2,
-	TIER_SPECIAL_FLOATING = 3,
-	TIER_PINNED = 4,
+	TIER_FLOATING = 1,
+	TIER_FULLSCREEN = 2,
+	TIER_SPECIAL_TILED = 3,
+	TIER_SPECIAL_FLOATING = 4,
+	TIER_PINNED = 5,
 };
 
 struct hypr_client_item {
@@ -387,15 +388,19 @@ int grabit_hyprland_clients(struct rect **out, size_t *n_out) {
 		bool is_special =
 			ws_active_special || (wid_val < 0) || ws_name_is_special(wname_val);
 
+		bool fullscreen = false;
+		if (json_object_object_get_ex(c, "fullscreen", &o))
+			fullscreen = (json_object_get_int64(o) & 2) != 0;
+
 		enum client_tier tier;
 		if (is_pinned)
 			tier = TIER_PINNED;
-		else if (is_special && floating)
-			tier = TIER_SPECIAL_FLOATING;
+		else if (is_special)
+			tier = floating ? TIER_SPECIAL_FLOATING : TIER_SPECIAL_TILED;
+		else if (fullscreen)
+			tier = TIER_FULLSCREEN;
 		else if (floating)
 			tier = TIER_FLOATING;
-		else if (is_special)
-			tier = TIER_SPECIAL_TILED;
 		else
 			tier = TIER_TILED;
 
