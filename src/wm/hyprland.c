@@ -249,7 +249,7 @@ int grabit_hyprland_layers(struct rect **out, size_t *n_out) {
 		struct json_object *levels = NULL;
 		if (!json_object_object_get_ex(oval, "levels", &levels)) continue;
 		json_object_object_foreach(levels, lvl, surfaces) {
-			if (strcmp(lvl, "2") != 0 && strcmp(lvl, "3") != 0) continue;
+			if (strcmp(lvl, "0") == 0) continue;
 			if (json_object_get_type(surfaces) != json_type_array) continue;
 			size_t n = json_object_array_length(surfaces);
 			for (size_t i = 0; i < n; i++) {
