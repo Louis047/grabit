@@ -233,48 +233,61 @@ static bool layer_rect(struct json_object *s, struct rect *out) {
 	return true;
 }
 
-int grabit_hyprland_layers(struct rect **out, size_t *n_out) {
-	*out = NULL;
-	*n_out = 0;
+static int push_rect(struct rect **arr, size_t *n, size_t *cap, struct rect r) {
+	if (*n == *cap) {
+		size_t grown_cap = *cap ? *cap * 2 : 8;
+		struct rect *grown = realloc(*arr, grown_cap * sizeof **arr);
+		if (!grown) return -1;
+		*arr = grown;
+		*cap = grown_cap;
+	}
+	(*arr)[(*n)++] = r;
+	return 0;
+}
+
+int grabit_hyprland_layers(struct rect **below_out, size_t *n_below_out,
+						   struct rect **above_out, size_t *n_above_out) {
+	*below_out = NULL;
+	*n_below_out = 0;
+	*above_out = NULL;
+	*n_above_out = 0;
 	struct json_object *root = NULL;
 	if (query_object("j/layers", &root) != 0) return -1;
 
-	size_t cap = 8, k = 0;
-	struct rect *arr = calloc(cap, sizeof *arr);
-	if (!arr) {
-		json_object_put(root);
-		return -1;
-	}
+	struct rect *below = NULL, *above = NULL;
+	size_t n_below = 0, cap_below = 0, n_above = 0, cap_above = 0;
+	int rc = 0;
 
 	json_object_object_foreach(root, oname, oval) {
 		(void)oname;
 		struct json_object *levels = NULL;
 		if (!json_object_object_get_ex(oval, "levels", &levels)) continue;
 		json_object_object_foreach(levels, lvl, surfaces) {
-			if (strcmp(lvl, "0") == 0) continue;
+			bool over = strcmp(lvl, "2") == 0 || strcmp(lvl, "3") == 0;
+			if (!over && strcmp(lvl, "1") != 0) continue;
 			if (json_object_get_type(surfaces) != json_type_array) continue;
 			size_t n = json_object_array_length(surfaces);
 			for (size_t i = 0; i < n; i++) {
 				struct rect r;
 				if (!layer_rect(json_object_array_get_idx(surfaces, i), &r)) continue;
-				if (k == cap) {
-					struct rect *grown = realloc(arr, cap * 2 * sizeof *arr);
-					if (!grown) {
-						free(arr);
-						json_object_put(root);
-						return -1;
-					}
-					arr = grown;
-					cap *= 2;
-				}
-				arr[k++] = r;
+				rc = over ? push_rect(&above, &n_above, &cap_above, r)
+						  : push_rect(&below, &n_below, &cap_below, r);
+				if (rc != 0) goto done;
 			}
 		}
 	}
 
+done:
 	json_object_put(root);
-	*out = arr;
-	*n_out = k;
+	if (rc != 0) {
+		free(below);
+		free(above);
+		return -1;
+	}
+	*below_out = below;
+	*n_below_out = n_below;
+	*above_out = above;
+	*n_above_out = n_above;
 	return 0;
 }
 
