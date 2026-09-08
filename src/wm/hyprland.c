@@ -146,6 +146,10 @@ struct active_ws {
 	bool is_special;
 };
 
+static bool ws_name_is_special(const char *n) {
+	return n && (strcmp(n, "special") == 0 || strncmp(n, "special:", 8) == 0);
+}
+
 static int collect_active_ws(struct active_ws **out, size_t *n_out) {
 	*out = NULL;
 	*n_out = 0;
@@ -182,12 +186,10 @@ static int collect_active_ws(struct active_ws **out, size_t *n_out) {
 			wss[k].id = ws_id;
 			if (ws_name) {
 				size_t len = strlen(ws_name);
-				if (len >= sizeof wss[k].name) len = sizeof wss[k].name - 1;
-				memcpy(wss[k].name, ws_name, len);
-				wss[k].name[len] = '\0';
+				if (len < sizeof wss[k].name) memcpy(wss[k].name, ws_name, len + 1);
 			}
-			wss[k].is_special = (f == 1) || (ws_id < 0) ||
-								(ws_name && strncmp(ws_name, "special", 7) == 0);
+			wss[k].is_special =
+				(f == 1) || (ws_id < 0) || ws_name_is_special(ws_name);
 			k++;
 		}
 	}
@@ -382,8 +384,8 @@ int grabit_hyprland_clients(struct rect **out, size_t *n_out) {
 		if (json_object_object_get_ex(c, "focusHistoryID", &o))
 			focus_id = json_object_get_int64(o);
 
-		bool is_special = ws_active_special || (wid_val < 0) ||
-						  (wname_val && strncmp(wname_val, "special", 7) == 0);
+		bool is_special =
+			ws_active_special || (wid_val < 0) || ws_name_is_special(wname_val);
 
 		enum client_tier tier;
 		if (is_pinned)
@@ -412,7 +414,13 @@ int grabit_hyprland_clients(struct rect **out, size_t *n_out) {
 	if (k > 1)
 		qsort(items, k, sizeof *items, client_cmp);
 
-	size_t unique_count = 0;
+	struct rect *arr = calloc(k + 1, sizeof *arr);
+	if (!arr) {
+		free(items);
+		return -1;
+	}
+
+	size_t u = 0;
 	for (size_t i = 0; i < k; i++) {
 		bool dup = false;
 		for (size_t j = i + 1; j < k; j++) {
@@ -421,19 +429,11 @@ int grabit_hyprland_clients(struct rect **out, size_t *n_out) {
 				break;
 			}
 		}
-		if (!dup) items[unique_count++] = items[i];
+		if (!dup) arr[u++] = items[i].r;
 	}
-
-	struct rect *arr = calloc(unique_count + 1, sizeof *arr);
-	if (!arr) {
-		free(items);
-		return -1;
-	}
-	for (size_t i = 0; i < unique_count; i++)
-		arr[i] = items[i].r;
 
 	free(items);
 	*out = arr;
-	*n_out = unique_count;
+	*n_out = u;
 	return 0;
 }
